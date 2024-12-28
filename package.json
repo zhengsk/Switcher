@@ -30,7 +30,9 @@
       "https://*/*"
     ],
     "permissions": [
-      "storage"
+      "storage",
+      "tabs",
+      "activeTab"
     ]
   }
 }

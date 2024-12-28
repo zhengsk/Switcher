@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react"
-import type { Account } from "@/src/types"
-import { Button, Input, List, Card, message, Popconfirm } from "antd"
-import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined } from "@ant-design/icons"
+import type { Account } from "@/src/types/account";
+import { Button, Input, List, Card, message, Popconfirm, Modal, Tooltip } from "antd"
+import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons"
 
 function IndexPopup() {
   const [accounts, setAccounts] = useState<Account[]>([])
-  const [newAccount, setNewAccount] = useState({
+  const [newAccount, setNewAccount] = useState<Account>({
     username: "",
     password: ""
   })
   const [loading, setLoading] = useState(true)
   const [messageApi, contextHolder] = message.useMessage()
+  const [editingAccount, setEditingAccount] = useState<{ index: number, account: Account } | null>(null)
 
   useEffect(() => {
     const loadAccounts = async () => {
@@ -61,7 +62,7 @@ function IndexPopup() {
         type: "SWITCH_ACCOUNT",
         account,
         loginConfig: {
-          url: "/api/login",
+          url: "/v3/auth/",
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -88,6 +89,26 @@ function IndexPopup() {
     }
   }
 
+  const handleEditAccount = async () => {
+    if (!editingAccount) return
+    if (!editingAccount.account.username || !editingAccount.account.password) {
+      messageApi.warning("请输入用户名和密码")
+      return
+    }
+
+    try {
+      const updatedAccounts = [...accounts]
+      updatedAccounts[editingAccount.index] = editingAccount.account
+      await chrome.storage.local.set({ accounts: updatedAccounts })
+      setAccounts(updatedAccounts)
+      setEditingAccount(null)
+      messageApi.success("修改账号成功")
+    } catch (error) {
+      messageApi.error("修改账号失败")
+      console.error(error)
+    }
+  }
+
   return (
     <div style={{ width: 350, padding: "12px" }}>
       {contextHolder}
@@ -103,26 +124,34 @@ function IndexPopup() {
           renderItem={(account, index) => (
             <List.Item
               actions={[
-                <Button
-                  key="switch"
-                  type="primary"
-                  icon={<SwapOutlined />}
-                  size="small"
-                  onClick={() => handleSwitchAccount(account)}>
-                  切换
-                </Button>,
+                <Tooltip title="编辑" key="edit">
+                  <Button
+                    icon={<EditOutlined />}
+                    size="small"
+                    onClick={() => setEditingAccount({ index, account: { ...account } })}
+                  />
+                </Tooltip>,
+                <Tooltip title="切换" key="switch">
+                  <Button
+                    type="primary"
+                    icon={<SwapOutlined />}
+                    size="small"
+                    onClick={() => handleSwitchAccount(account)}
+                  />
+                </Tooltip>,
                 <Popconfirm
                   key="delete"
                   title="确定要删除这个账号吗？"
                   onConfirm={() => handleDeleteAccount(index)}
                   okText="确定"
                   cancelText="取消">
-                  <Button
-                    danger
-                    size="small"
-                    icon={<DeleteOutlined />}>
-                    删除
-                  </Button>
+                  <Tooltip title="删除">
+                    <Button
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                    />
+                  </Tooltip>
                 </Popconfirm>
               ]}>
               <List.Item.Meta
@@ -133,6 +162,36 @@ function IndexPopup() {
           )}
         />
       </Card>
+
+      <Modal
+        title="修改账号"
+        open={!!editingAccount}
+        onOk={handleEditAccount}
+        onCancel={() => setEditingAccount(null)}
+        okText="确定"
+        cancelText="取消">
+        <Input
+          placeholder="用户名"
+          prefix={<UserOutlined />}
+          value={editingAccount?.account.username}
+          onChange={(e) =>
+            setEditingAccount(prev =>
+              prev ? { ...prev, account: { ...prev.account, username: e.target.value } } : null
+            )
+          }
+          style={{ marginBottom: 8 }}
+        />
+        <Input.Password
+          placeholder="密码"
+          prefix={<LockOutlined />}
+          value={editingAccount?.account.password}
+          onChange={(e) =>
+            setEditingAccount(prev =>
+              prev ? { ...prev, account: { ...prev.account, password: e.target.value } } : null
+            )
+          }
+        />
+      </Modal>
 
       <Card
         title="添加新账号"
