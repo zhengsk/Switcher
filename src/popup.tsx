@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react"
 import type { Account } from "@/src/types/account";
-import { Button, Input, List, Card, message, Popconfirm, Modal, Tooltip } from "antd"
+import { Button, Input, List, Card, message, Popconfirm, Modal, Tooltip, Tag } from "antd"
 import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons"
+import { Select } from "antd"
+const { TextArea } = Input
 
 function IndexPopup() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [newAccount, setNewAccount] = useState<Account>({
     username: "",
-    password: ""
+    password: "",
+    remark: "",
+    environment: "prod"
   })
   const [loading, setLoading] = useState(true)
   const [messageApi, contextHolder] = message.useMessage()
@@ -42,7 +46,7 @@ function IndexPopup() {
       const updatedAccounts = [...accounts, newAccount]
       await chrome.storage.local.set({ accounts: updatedAccounts })
       setAccounts(updatedAccounts)
-      setNewAccount({ username: "", password: "" })
+      setNewAccount({ username: "", password: "", remark: "", environment: "prod" })
       messageApi.success("添加账号成功")
     } catch (error) {
       messageApi.error("添加账号失败")
@@ -155,8 +159,19 @@ function IndexPopup() {
                 </Popconfirm>
               ]}>
               <List.Item.Meta
-                title={account.username}
-                description="点击切换按钮登录此账号"
+                title={
+                  <span>
+                    {account.username}
+                    <Tag color={
+                      account.environment === 'prod' ? 'red' :
+                        account.environment === 'fat' ? 'orange' :
+                          'green'
+                    } style={{ marginLeft: 8 }}>
+                      {(account.environment || '').toUpperCase()}
+                    </Tag>
+                  </span>
+                }
+                description={account.remark || "点击切换按钮登录此账号"}
               />
             </List.Item>
           )}
@@ -190,6 +205,31 @@ function IndexPopup() {
               prev ? { ...prev, account: { ...prev.account, password: e.target.value } } : null
             )
           }
+          style={{ marginBottom: 8 }}
+        />
+        <Select
+          style={{ width: '100%', marginBottom: 8 }}
+          value={editingAccount?.account.environment}
+          onChange={(value) =>
+            setEditingAccount(prev =>
+              prev ? { ...prev, account: { ...prev.account, environment: value } } : null
+            )
+          }
+          options={[
+            { label: '生产环境', value: 'prod' },
+            { label: '测试环境', value: 'fat' },
+            { label: '开发环境', value: 'dev' },
+          ]}
+        />
+        <TextArea
+          placeholder="备注信息"
+          value={editingAccount?.account.remark}
+          onChange={(e) =>
+            setEditingAccount(prev =>
+              prev ? { ...prev, account: { ...prev.account, remark: e.target.value } } : null
+            )
+          }
+          rows={2}
         />
       </Modal>
 
@@ -213,6 +253,25 @@ function IndexPopup() {
             setNewAccount({ ...newAccount, password: e.target.value })
           }
           style={{ marginBottom: 8 }}
+        />
+        <Select
+          style={{ width: '100%', marginBottom: 8 }}
+          value={newAccount.environment}
+          onChange={(value) => setNewAccount({ ...newAccount, environment: value })}
+          options={[
+            { label: '生产环境', value: 'prod' },
+            { label: '测试环境', value: 'fat' },
+            { label: '开发环境', value: 'dev' },
+          ]}
+        />
+        <TextArea
+          placeholder="备注信息"
+          value={newAccount.remark}
+          onChange={(e) =>
+            setNewAccount({ ...newAccount, remark: e.target.value })
+          }
+          style={{ marginBottom: 8 }}
+          rows={2}
         />
         <Button
           type="primary"
