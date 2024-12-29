@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import type { Account } from "@/src/types/account";
-import { Button, Input, List, Card, message, Popconfirm, Modal, Tooltip, Tag } from "antd"
+import { Button, Input, List, Card, message, Popconfirm, Modal, Tooltip, Tag, Radio } from "antd"
 import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons"
 import { Select } from "antd"
 import styles from '@/src/styles/popup.module.less'
@@ -18,15 +18,42 @@ function IndexPopup() {
   const [messageApi, contextHolder] = message.useMessage()
   const [editingAccount, setEditingAccount] = useState<{ index: number, account: Account } | null>(null)
   const [activeTab, setActiveTab] = useState<'list' | 'add'>('list')
+  const [lastSwitchedUsername, setLastSwitchedUsername] = useState<string>('')
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('all')
+
+  const getCurrentEnvironment = async (): Promise<string> => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (!tab?.url) return 'prod'
+
+      const url = new URL(tab.url)
+      const subdomain = url.hostname.split('.')[0]
+
+      if (subdomain === 'fat') return 'fat'
+      if (subdomain === 'dev') return 'dev'
+      return 'prod'
+    } catch (error) {
+      console.error('获取当前环境失败:', error)
+      return 'prod'
+    }
+  }
 
   useEffect(() => {
-    const loadAccounts = async () => {
+    const loadAccountsAndSetEnvironment = async () => {
       try {
         setLoading(true)
-        const result = await chrome.storage.local.get("accounts")
+        const [result, currentEnv] = await Promise.all([
+          chrome.storage.local.get(["accounts", "lastSwitchedUsername"]),
+          getCurrentEnvironment()
+        ])
+
         if (result.accounts) {
           setAccounts(result.accounts)
         }
+        if (result.lastSwitchedUsername) {
+          setLastSwitchedUsername(result.lastSwitchedUsername)
+        }
+        setSelectedEnvironment(currentEnv)
       } catch (error) {
         messageApi.error("加载账号失败")
         console.error(error)
@@ -35,7 +62,7 @@ function IndexPopup() {
       }
     }
 
-    loadAccounts()
+    loadAccountsAndSetEnvironment()
   }, [])
 
   const handleAddAccount = async () => {
@@ -77,6 +104,8 @@ function IndexPopup() {
         }
       })
 
+      await chrome.storage.local.set({ lastSwitchedUsername: account.username })
+      setLastSwitchedUsername(account.username)
       messageApi.success("正在切换账号...")
     } catch (error) {
       messageApi.error("切换账号失败")
@@ -116,11 +145,32 @@ function IndexPopup() {
     }
   }
 
+  const filteredAccounts = accounts.filter(account =>
+    selectedEnvironment === 'all' || account.environment === selectedEnvironment
+  )
+
   return (
     <div className={`${styles.container} ${!!editingAccount ? styles.containerExpanded : ''}`}>
       {contextHolder}
       <Card
-        title="账号切换器"
+        title={
+          <div className={styles.cardHeader}>
+            <span>账号切换器</span>
+            {activeTab === 'list' && (
+              <Radio.Group
+                value={selectedEnvironment}
+                onChange={e => setSelectedEnvironment(e.target.value)}
+                size="small"
+                className={styles.environmentButtons}
+              >
+                <Radio.Button value="all">All</Radio.Button>
+                <Radio.Button value="prod">Prod</Radio.Button>
+                <Radio.Button value="fat">Fat</Radio.Button>
+                <Radio.Button value="dev">Dev</Radio.Button>
+              </Radio.Group>
+            )}
+          </div>
+        }
         size="small"
         className={styles.card}
         loading={loading}
@@ -137,11 +187,12 @@ function IndexPopup() {
         {activeTab === 'list' ? (
           <List
             size="small"
-            dataSource={accounts}
+            dataSource={filteredAccounts}
             locale={{ emptyText: "暂无保存的账号" }}
+            className={styles.accountList}
             renderItem={(account, index) => (
               <List.Item
-                className={styles.listItem}
+                className={`${styles.listItem} ${account.username === lastSwitchedUsername ? styles.lastSwitched : ''}`}
                 onClick={() => handleSwitchAccount(account)}
                 style={{ cursor: 'pointer' }}
                 actions={[
@@ -185,7 +236,7 @@ function IndexPopup() {
                 </Tag>
                 <List.Item.Meta
                   title={account.username}
-                  description={account.remark || "点击切换按钮登录此账号"}
+                  description={account.remark || "点击切换账号"}
                 />
               </List.Item>
             )}

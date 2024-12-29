@@ -41,7 +41,7 @@
   font-size: 10px;
   padding: 0 4px;
   z-index: 1;
-  transform: scale(0.8);
+  transform: scale(0.75);
 }
 
 .editModal {
@@ -63,4 +63,58 @@
       padding: 0;
     }
   }
+}
+
+.lastSwitched {
+  background-color: rgba(24, 144, 255, 0.05);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 12px 12px 0 0;
+    border-color: #1890ff transparent transparent transparent;
+    border-top-left-radius: 4px;
+  }
+  
+  &:hover {
+    &::before {
+      border-color: #40a9ff transparent transparent transparent;
+    }
+  }
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  :global {
+    .ant-radio-group {
+      font-size: 12px;
+    }
+  }
+}
+
+.environmentButtons {
+  margin: auto;
+  
+  :global {
+    .ant-radio-button-wrapper {
+      padding: 0 8px;
+    }
+  }
+}
+
+.environmentFilter {
+  width: 100px;
+  margin-bottom: 12px;
+}
+
+.accountList {
+  // margin-top: 4px;  // 移除这个margin，因为不再需要
 } 
