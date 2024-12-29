@@ -1,0 +1,47 @@
+.container {
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 0 24px;
+}
+
+.siteList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.siteCard {
+  :global {
+    .ant-card-meta-description {
+      > div {
+        margin-bottom: 4px;
+        word-break: break-all;
+      }
+    }
+  }
+
+  .ant-card-actions {
+    border-top: 1px solid #f0f0f0;
+    background: #fafafa;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  color: #1f1f1f;
+} 

@@ -36,6 +36,10 @@
       "storage",
       "tabs",
       "activeTab"
-    ]
+    ],
+    "options": {
+      "page": "src/options.tsx",
+      "open_in_tab": true
+    }
   }
 }
