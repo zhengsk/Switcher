@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
 import type { Account } from "@/src/types/account";
 import { Button, Input, List, Card, message, Popconfirm, Modal, Tooltip, Tag, Radio } from "antd"
-import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined, EditOutlined, PlusOutlined, DownloadOutlined } from "@ant-design/icons"
+import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined, EditOutlined, PlusOutlined, DownloadOutlined, HolderOutlined } from "@ant-design/icons"
 import { Select } from "antd"
 import styles from '@/src/styles/popup.module.less'
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 const { TextArea } = Input
 
 // 添加批量导入的类型定义
@@ -287,6 +288,52 @@ function IndexPopup() {
     }
   }
 
+  // 添加拖拽开始的处理函数
+  const handleDragStart = () => {
+    // 修改鼠标样式为抓取状态
+    document.body.style.cursor = 'grabbing'
+  }
+
+  // 修改拖拽结束的处理函数
+  const handleDragEnd = async (result: DropResult) => {
+    // 恢复鼠标样式
+    document.body.style.cursor = 'default'
+
+    // 如果没有目标位置或者位置没有改变，则不处理
+    if (!result.destination || result.destination.index === result.source.index) {
+      return
+    }
+
+    const startIndex = result.source.index
+    const endIndex = result.destination.index
+
+    // 创建新的数组而不是修改原数组
+    const newFilteredAccounts = [...filteredAccounts]
+    const [removed] = newFilteredAccounts.splice(startIndex, 1)
+    newFilteredAccounts.splice(endIndex, 0, removed)
+
+    // 更新所有账号的顺序
+    const updatedAccounts = [...accounts]
+    const accountMap = new Map(accounts.map((acc, index) => [`${acc.environment}:${acc.username}`, index]))
+
+    filteredAccounts.forEach((oldAccount, oldIndex) => {
+      const newAccount = newFilteredAccounts[oldIndex]
+      const key = `${oldAccount.environment}:${oldAccount.username}`
+      const originalIndex = accountMap.get(key)
+      if (originalIndex !== undefined) {
+        updatedAccounts[originalIndex] = newAccount
+      }
+    })
+
+    try {
+      await chrome.storage.local.set({ accounts: updatedAccounts })
+      setAccounts(updatedAccounts)
+    } catch (error) {
+      messageApi.error('保存排序失败')
+      console.error(error)
+    }
+  }
+
   return (
     <div className={`${styles.container} ${!!editingAccount ? styles.containerExpanded : ''}`}>
       {contextHolder}
@@ -335,62 +382,99 @@ function IndexPopup() {
           </div>
         }>
         {activeTab === 'list' ? (
-          <List
-            size="small"
-            dataSource={filteredAccounts}
-            locale={{ emptyText: "暂无保存的账号" }}
-            className={styles.accountList}
-            renderItem={(account, index) => (
-              <List.Item
-                className={`${styles.listItem} ${account.username === lastSwitchedUsername ? styles.lastSwitched : ''}`}
-                onClick={() => handleSwitchAccount(account)}
-                style={{ cursor: 'pointer' }}
-                actions={[
-                  <Tooltip title="编辑" key="edit">
-                    <Button
-                      icon={<EditOutlined />}
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingAccount({ index, account: { ...account } });
-                      }}
-                    />
-                  </Tooltip>,
-                  <Popconfirm
-                    key="delete"
-                    title="确定要删除这个账号吗？"
-                    onConfirm={(e) => {
-                      e?.stopPropagation();
-                      handleDeleteAccount(index);
-                    }}
-                    okText="确定"
-                    cancelText="取消">
-                    <Tooltip title="删除">
-                      <Button
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </Tooltip>
-                  </Popconfirm>
-                ]}>
-                <Tag
-                  color={
-                    account.environment === 'prod' ? 'red' :
-                      account.environment === 'fat' ? 'orange' : 'green'
-                  }
-                  className={styles.environmentTag}
+          <DragDropContext
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <Droppable droppableId="accountList">
+              {(provided) => (
+                <div
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
                 >
-                  {(account.environment || '').toUpperCase()}
-                </Tag>
-                <List.Item.Meta
-                  title={account.username}
-                  description={account.remark || "点击切换账号"}
-                />
-              </List.Item>
-            )}
-          />
+                  <List
+                    size="small"
+                    dataSource={filteredAccounts}
+                    locale={{ emptyText: "暂无保存的账号" }}
+                    className={styles.accountList}
+                    renderItem={(account: Account, index: number) => (
+                      <Draggable
+                        key={`${account.environment}:${account.username}`}
+                        draggableId={`${account.environment}:${account.username}`}
+                        index={index}
+                      >
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={styles.draggableItem}
+                          >
+                            <List.Item
+                              className={`${styles.listItem} ${account.username === lastSwitchedUsername ? styles.lastSwitched : ''
+                                } ${snapshot.isDragging ? styles.dragging : ''}`}
+                              onClick={() => handleSwitchAccount(account)}
+                              style={{ cursor: 'pointer' }}
+                              actions={[
+                                <Tooltip title="编辑" key="edit">
+                                  <Button
+                                    icon={<EditOutlined />}
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingAccount({ index, account: { ...account } });
+                                    }}
+                                  />
+                                </Tooltip>,
+                                <Popconfirm
+                                  key="delete"
+                                  title="确定要删除这个账号吗？"
+                                  onConfirm={(e) => {
+                                    e?.stopPropagation();
+                                    handleDeleteAccount(index);
+                                  }}
+                                  okText="确定"
+                                  cancelText="取消">
+                                  <Tooltip title="删除">
+                                    <Button
+                                      danger
+                                      size="small"
+                                      icon={<DeleteOutlined />}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </Tooltip>
+                                </Popconfirm>
+                              ]}>
+                              <div
+                                {...provided.dragHandleProps}
+                                className={styles.dragHandle}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <HolderOutlined />
+                              </div>
+                              <Tag
+                                color={
+                                  account.environment === 'prod' ? 'red' :
+                                    account.environment === 'fat' ? 'orange' : 'green'
+                                }
+                                className={styles.environmentTag}
+                              >
+                                {(account.environment || '').toUpperCase()}
+                              </Tag>
+                              <List.Item.Meta
+                                title={account.username}
+                                description={account.remark || "点击切换账号"}
+                              />
+                            </List.Item>
+                          </div>
+                        )}
+                      </Draggable>
+                    )}
+                  />
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
         ) : (
           <div>
             <div className={styles.addAccountHeader}>

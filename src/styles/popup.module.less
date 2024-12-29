@@ -19,7 +19,11 @@
 .listItem {
   position: relative;
   border-radius: 4px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  padding-left: 0 !important; // 覆盖 antd 默认样式
 
   &:hover {
     background-color: #f0f2f5;
@@ -30,6 +34,11 @@
       margin-top: auto;
       align-self: flex-end;
       margin-bottom: 0px;
+    }
+
+    .ant-list-item-meta {
+      flex: 1;
+      margin-left: 8px;
     }
   }
 }
@@ -137,4 +146,36 @@
   display: flex;
   gap: 4px;
   align-items: center;
+}
+
+.draggableItem {
+  margin-bottom: 12px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.dragging {
+  background-color: #fafafa;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  opacity: 0.8;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  color: #999;
+  cursor: grab;
+  
+  &:hover {
+    color: #666;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
 } 
