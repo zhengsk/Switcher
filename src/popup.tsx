@@ -142,26 +142,26 @@ function IndexPopup() {
             renderItem={(account, index) => (
               <List.Item
                 className={styles.listItem}
+                onClick={() => handleSwitchAccount(account)}
+                style={{ cursor: 'pointer' }}
                 actions={[
                   <Tooltip title="编辑" key="edit">
                     <Button
                       icon={<EditOutlined />}
                       size="small"
-                      onClick={() => setEditingAccount({ index, account: { ...account } })}
-                    />
-                  </Tooltip>,
-                  <Tooltip title="切换" key="switch">
-                    <Button
-                      type="primary"
-                      icon={<SwapOutlined />}
-                      size="small"
-                      onClick={() => handleSwitchAccount(account)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingAccount({ index, account: { ...account } });
+                      }}
                     />
                   </Tooltip>,
                   <Popconfirm
                     key="delete"
                     title="确定要删除这个账号吗？"
-                    onConfirm={() => handleDeleteAccount(index)}
+                    onConfirm={(e) => {
+                      e?.stopPropagation();
+                      handleDeleteAccount(index);
+                    }}
                     okText="确定"
                     cancelText="取消">
                     <Tooltip title="删除">
@@ -169,6 +169,7 @@ function IndexPopup() {
                         danger
                         size="small"
                         icon={<DeleteOutlined />}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </Tooltip>
                   </Popconfirm>
