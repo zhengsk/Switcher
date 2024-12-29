@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react"
 import type { Account } from "@/src/types/account";
 import { Button, Input, List, Card, message, Popconfirm, Modal, Tooltip, Tag, Radio } from "antd"
-import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons"
+import { UserOutlined, LockOutlined, SwapOutlined, DeleteOutlined, EditOutlined, PlusOutlined, DownloadOutlined } from "@ant-design/icons"
 import { Select } from "antd"
 import styles from '@/src/styles/popup.module.less'
 const { TextArea } = Input
+
+// 添加批量导入的类型定义
+interface ImportResult {
+  success: Account[];
+  failed: string[];
+}
 
 function IndexPopup() {
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -20,6 +26,8 @@ function IndexPopup() {
   const [activeTab, setActiveTab] = useState<'list' | 'add'>('list')
   const [lastSwitchedUsername, setLastSwitchedUsername] = useState<string>('')
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('all')
+  const [importMode, setImportMode] = useState(false)
+  const [importText, setImportText] = useState('')
 
   const getCurrentEnvironment = async (): Promise<string> => {
     try {
@@ -65,9 +73,25 @@ function IndexPopup() {
     loadAccountsAndSetEnvironment()
   }, [])
 
+  // 修改检查账号是否存在的辅助函数
+  const isAccountExists = (username: string, environment: string, excludeIndex?: number) => {
+    return accounts.some((acc, index) =>
+      acc.username.toLowerCase() === username.toLowerCase() && // 忽略大小写比较
+      acc.environment === environment &&
+      (excludeIndex === undefined || index !== excludeIndex) // 修复排除逻辑
+    )
+  }
+
+  // 修改添加账号的处理函数
   const handleAddAccount = async () => {
     if (!newAccount.username || !newAccount.password) {
       messageApi.warning("请输入用户名和密码")
+      return
+    }
+
+    // 检查账号是否已存在
+    if (isAccountExists(newAccount.username, newAccount.environment)) {
+      messageApi.error(`${newAccount.environment.toUpperCase()} 环境下已存在账号 ${newAccount.username}`)
       return
     }
 
@@ -125,10 +149,23 @@ function IndexPopup() {
     }
   }
 
+  // 修改编辑账号的处理函数
   const handleEditAccount = async () => {
     if (!editingAccount) return
     if (!editingAccount.account.username || !editingAccount.account.password) {
       messageApi.warning("请输入用户名和密码")
+      return
+    }
+
+    // 检查修改后的账号是否与其他账号冲突
+    if (isAccountExists(
+      editingAccount.account.username,
+      editingAccount.account.environment,
+      editingAccount.index
+    )) {
+      messageApi.error(
+        `${editingAccount.account.environment.toUpperCase()} 环境下已存在账号 ${editingAccount.account.username}`
+      )
       return
     }
 
@@ -148,6 +185,107 @@ function IndexPopup() {
   const filteredAccounts = accounts.filter(account =>
     selectedEnvironment === 'all' || account.environment === selectedEnvironment
   )
+
+  // 修改批量导入的解析函数
+  const parseImportText = (text: string): ImportResult => {
+    const lines = text.trim().split('\n')
+    const result: ImportResult = { success: [], failed: [] }
+    const existingAccounts = new Set(
+      accounts.map(acc => `${acc.environment}:${acc.username.toLowerCase()}`) // 存储时转为小写
+    )
+
+    lines.forEach((line, index) => {
+      try {
+        const [username, password, remark = ''] = line.trim().split(/[,\t]/).map(s => s.trim())
+        if (username && password) {
+          const environment = selectedEnvironment === 'all' ? 'prod' : selectedEnvironment
+          const accountKey = `${environment}:${username.toLowerCase()}` // 比较时转为小写
+
+          if (existingAccounts.has(accountKey)) {
+            result.failed.push(`第 ${index + 1} 行: ${environment.toUpperCase()} 环境下已存在账号 ${username}`)
+          } else {
+            result.success.push({
+              username,
+              password,
+              remark,
+              environment
+            })
+            existingAccounts.add(accountKey)
+          }
+        } else {
+          result.failed.push(`第 ${index + 1} 行: 格式错误`)
+        }
+      } catch (error) {
+        result.failed.push(`第 ${index + 1} 行: 解析失败`)
+      }
+    })
+
+    return result
+  }
+
+  // 添加批量导入的处理函数
+  const handleBatchImport = async () => {
+    if (!importText.trim()) {
+      messageApi.warning('请输入要导入的账号信息')
+      return
+    }
+
+    try {
+      const { success, failed } = parseImportText(importText)
+
+      if (success.length === 0) {
+        messageApi.error('没有可导入的有效账号')
+        return
+      }
+
+      const updatedAccounts = [...accounts, ...success]
+      await chrome.storage.local.set({ accounts: updatedAccounts })
+      setAccounts(updatedAccounts)
+      setImportText('')
+      setImportMode(false)
+      setActiveTab('list')
+
+      if (failed.length > 0) {
+        messageApi.warning(`导入完成，${failed.length}个账号导入失败`)
+      } else {
+        messageApi.success(`成功导入${success.length}个账号`)
+      }
+    } catch (error) {
+      messageApi.error('导入失败')
+      console.error(error)
+    }
+  }
+
+  // 添加导出账号的处理函数
+  const handleExportAccounts = () => {
+    try {
+      const accountsToExport = selectedEnvironment === 'all'
+        ? accounts
+        : accounts.filter(acc => acc.environment === selectedEnvironment)
+
+      if (accountsToExport.length === 0) {
+        messageApi.warning('没有可导出的账号')
+        return
+      }
+
+      const exportText = accountsToExport
+        .map(acc => `${acc.username},${acc.password},${acc.remark || ''}`)
+        .join('\n')
+
+      // 创建临时文本区域来复制内容
+      const textarea = document.createElement('textarea')
+      textarea.value = exportText
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+
+      messageApi.success(`已复制 ${accountsToExport.length} 个账号到剪贴板`)
+    } catch (error) {
+      messageApi.error('导出失败')
+      console.error(error)
+    }
+  }
 
   return (
     <div className={`${styles.container} ${!!editingAccount ? styles.containerExpanded : ''}`}>
@@ -175,14 +313,26 @@ function IndexPopup() {
         className={styles.card}
         loading={loading}
         extra={
-          <Tooltip title={activeTab === 'list' ? '添加账号' : '返回列表'}>
-            <Button
-              type="link"
-              size="small"
-              icon={activeTab === 'list' ? <PlusOutlined /> : <SwapOutlined />}
-              onClick={() => setActiveTab(activeTab === 'list' ? 'add' : 'list')}
-            />
-          </Tooltip>
+          <div className={styles.cardExtra}>
+            {activeTab === 'list' && accounts.length > 0 && (
+              <Tooltip title="导出账号">
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={handleExportAccounts}
+                />
+              </Tooltip>
+            )}
+            <Tooltip title={activeTab === 'list' ? '添加账号' : '返回列表'}>
+              <Button
+                type="link"
+                size="small"
+                icon={activeTab === 'list' ? <PlusOutlined /> : <SwapOutlined />}
+                onClick={() => setActiveTab(activeTab === 'list' ? 'add' : 'list')}
+              />
+            </Tooltip>
+          </div>
         }>
         {activeTab === 'list' ? (
           <List
@@ -243,50 +393,88 @@ function IndexPopup() {
           />
         ) : (
           <div>
-            <Input
-              placeholder="用户名"
-              prefix={<UserOutlined />}
-              value={newAccount.username}
-              onChange={(e) =>
-                setNewAccount({ ...newAccount, username: e.target.value })
-              }
-              className={styles.formItem}
-            />
-            <Input.Password
-              placeholder="密码"
-              prefix={<LockOutlined />}
-              value={newAccount.password}
-              onChange={(e) =>
-                setNewAccount({ ...newAccount, password: e.target.value })
-              }
-              className={styles.formItem}
-            />
-            <Select
-              className={styles.formItem}
-              style={{ width: '100%' }}
-              value={newAccount.environment}
-              onChange={(value) => setNewAccount({ ...newAccount, environment: value })}
-              options={[
-                { label: '生产环境', value: 'prod' },
-                { label: '测试环境', value: 'fat' },
-                { label: '开发环境', value: 'dev' },
-              ]}
-            />
-            <TextArea
-              placeholder="备注信息"
-              value={newAccount.remark}
-              onChange={(e) =>
-                setNewAccount({ ...newAccount, remark: e.target.value })
-              }
-              className={styles.formItem}
-              rows={2}
-            />
-            <Button
-              type="primary"
-              block
-              onClick={handleAddAccount}>
-              添加账号
-            </Button>
+            <div className={styles.addAccountHeader}>
+              <Radio.Group
+                value={importMode}
+                onChange={e => setImportMode(e.target.value)}
+                size="small"
+                className={styles.importModeSwitch}
+              >
+                <Radio.Button value={false}>单个添加</Radio.Button>
+                <Radio.Button value={true}>批量导入</Radio.Button>
+              </Radio.Group>
+            </div>
+
+            {importMode ? (
+              <>
+                <TextArea
+                  placeholder={`请输入要导入的账号信息，每行一个账号
+格式：用户名,密码,备注(可选)
+例如：
+username1,password1,备注1
+username2,password2
+...`}
+                  value={importText}
+                  onChange={e => setImportText(e.target.value)}
+                  className={styles.formItem}
+                  rows={6}
+                />
+                <Button
+                  type="primary"
+                  block
+                  onClick={handleBatchImport}
+                >
+                  导入账号
+                </Button>
+              </>
+            ) : (
+              <>
+                <Input
+                  placeholder="用户名"
+                  prefix={<UserOutlined />}
+                  value={newAccount.username}
+                  onChange={(e) =>
+                    setNewAccount({ ...newAccount, username: e.target.value })
+                  }
+                  className={styles.formItem}
+                />
+                <Input.Password
+                  placeholder="密码"
+                  prefix={<LockOutlined />}
+                  value={newAccount.password}
+                  onChange={(e) =>
+                    setNewAccount({ ...newAccount, password: e.target.value })
+                  }
+                  className={styles.formItem}
+                />
+                <Select
+                  className={styles.formItem}
+                  style={{ width: '100%' }}
+                  value={newAccount.environment}
+                  onChange={(value) => setNewAccount({ ...newAccount, environment: value })}
+                  options={[
+                    { label: '生产环境', value: 'prod' },
+                    { label: '测试环境', value: 'fat' },
+                    { label: '开发环境', value: 'dev' },
+                  ]}
+                />
+                <TextArea
+                  placeholder="备注信息"
+                  value={newAccount.remark}
+                  onChange={(e) =>
+                    setNewAccount({ ...newAccount, remark: e.target.value })
+                  }
+                  className={styles.formItem}
+                  rows={2}
+                />
+                <Button
+                  type="primary"
+                  block
+                  onClick={handleAddAccount}>
+                  添加账号
+                </Button>
+              </>
+            )}
           </div>
         )}
       </Card>
