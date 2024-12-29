@@ -1,0 +1,66 @@
+.container {
+  width: 350px;
+  padding: 12px;
+  transition: height 0.3s ease;
+}
+
+.containerExpanded {
+  min-height: 320px;  // 展开时的高度
+}
+
+.card {
+  // margin-bottom: 16px;
+}
+
+.formItem {
+  margin-bottom: 8px;
+}
+
+.listItem {
+  position: relative;
+  border-radius: 4px;
+  margin-bottom: 12px;
+
+  &:hover {
+    background-color: #f0f2f5;
+  }
+  
+  :global {
+    .ant-list-item-action {
+      margin-top: auto;
+      align-self: flex-end;
+      margin-bottom: 0px;
+    }
+  }
+}
+
+.environmentTag {
+  position: absolute;
+  right: -8px;
+  top: 2px;
+  font-size: 10px;
+  padding: 0 4px;
+  z-index: 1;
+  transform: scale(0.8);
+}
+
+.editModal {
+  :global {
+    .ant-modal-content {
+      padding: 20px 24px 24px;
+    }
+    
+    .ant-modal-header {
+      margin-bottom: 20px;
+    }
+    
+    .ant-modal-body {
+      padding: 0;
+    }
+    
+    .ant-modal-footer {
+      margin-top: 24px;
+      padding: 0;
+    }
+  }
+} 
